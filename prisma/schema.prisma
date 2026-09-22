@@ -1,0 +1,263 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  username     String   @unique
+  name         String
+  passwordHash String
+  bio          String   @default("")
+  about        String   @default("")
+  location     String   @default("")
+  website      String   @default("")
+  avatar       String   @default("")
+  cover        String   @default("")
+  phone        String   @default("")
+  role         String   @default("user")
+  verified     Boolean  @default(false)
+  banned       Boolean  @default(false)
+  twoFactor    Boolean  @default(false)
+  privacyPrefs String   @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  posts         Post[]
+  comments      Comment[]
+  reactions     Reaction[]
+  saved         SavedPost[]
+  sentRequests  Friendship[]         @relation("FriendFrom")
+  recvRequests  Friendship[]         @relation("FriendTo")
+  following     Follow[]             @relation("Following")
+  followers     Follow[]             @relation("Followers")
+  messages      Message[]
+  conversations ConversationMember[]
+  notifications Notification[]
+  products      Product[]
+  events        Event[]
+  jobs          Job[]
+  groupsOwned   Group[]              @relation("GroupOwner")
+  groupMembers  GroupMember[]
+  pagesOwned    Page[]
+  reportsMade   Report[]             @relation("Reporter")
+  reportsAbout  Report[]             @relation("ReportedUser")
+  resetTokens   PasswordReset[]
+}
+
+model PasswordReset {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  token     String   @unique
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Post {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  authorId     String      @db.ObjectId
+  author       User        @relation(fields: [authorId], references: [id])
+  text         String
+  images       String      @default("[]")
+  feeling      String      @default("")
+  location     String      @default("")
+  privacy      String      @default("public")
+  shares       Int         @default(0)
+  sharedFromId String?     @db.ObjectId
+  sharedFrom   Post?       @relation("Shares", fields: [sharedFromId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sharedCopies Post[]      @relation("Shares")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  comments     Comment[]
+  reactions    Reaction[]
+  saved        SavedPost[]
+}
+
+model Comment {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  postId    String    @db.ObjectId
+  post      Post      @relation(fields: [postId], references: [id])
+  authorId  String    @db.ObjectId
+  author    User      @relation(fields: [authorId], references: [id])
+  parentId  String?   @db.ObjectId
+  parent    Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies   Comment[] @relation("CommentThread")
+  text      String
+  createdAt DateTime  @default(now())
+}
+
+model Reaction {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  postId String @db.ObjectId
+  post   Post   @relation(fields: [postId], references: [id])
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+  type   String
+
+  @@unique([postId, userId])
+}
+
+model SavedPost {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  postId String @db.ObjectId
+  post   Post   @relation(fields: [postId], references: [id])
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+}
+
+model Friendship {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  fromId String @db.ObjectId
+  from   User   @relation("FriendFrom", fields: [fromId], references: [id])
+  toId   String @db.ObjectId
+  to     User   @relation("FriendTo", fields: [toId], references: [id])
+  status String @default("pending")
+
+  @@unique([fromId, toId])
+}
+
+model Follow {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  followerId  String @db.ObjectId
+  follower    User   @relation("Following", fields: [followerId], references: [id])
+  followingId String @db.ObjectId
+  following   User   @relation("Followers", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId])
+}
+
+model Conversation {
+  id        String                 @id @default(auto()) @map("_id") @db.ObjectId
+  title     String                 @default("")
+  isGroup   Boolean                @default(false)
+  members   ConversationMember[]
+  messages  Message[]
+  updatedAt DateTime               @updatedAt
+}
+
+model ConversationMember {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String       @db.ObjectId
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  userId         String       @db.ObjectId
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String       @db.ObjectId
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       String       @db.ObjectId
+  sender         User         @relation(fields: [senderId], references: [id])
+  text           String
+  read           Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  text      String
+  type      String   @default("system")
+  unread    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Product {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  sellerId  String   @db.ObjectId
+  seller    User     @relation(fields: [sellerId], references: [id])
+  title     String
+  price     String
+  location  String
+  image     String   @default("")
+  category  String   @default("General")
+  createdAt DateTime @default(now())
+}
+
+model Event {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  hostId     String @db.ObjectId
+  host       User   @relation(fields: [hostId], references: [id])
+  title      String
+  date       String
+  location   String
+  cover      String @default("")
+  going      Int    @default(0)
+  interested Int    @default(0)
+}
+
+model Job {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  posterId String @db.ObjectId
+  poster   User   @relation(fields: [posterId], references: [id])
+  title    String
+  company  String
+  location String
+  type     String
+  salary   String
+}
+
+model Group {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId     String        @db.ObjectId
+  owner       User          @relation("GroupOwner", fields: [ownerId], references: [id])
+  name        String
+  cover       String        @default("")
+  privacy     String        @default("public")
+  description String        @default("")
+  members     GroupMember[]
+}
+
+model GroupMember {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  groupId String @db.ObjectId
+  group   Group  @relation(fields: [groupId], references: [id])
+  userId  String @db.ObjectId
+  user    User   @relation(fields: [userId], references: [id])
+  role    String @default("member")
+
+  @@unique([groupId, userId])
+}
+
+model Page {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId  String @db.ObjectId
+  owner    User   @relation(fields: [ownerId], references: [id])
+  name     String
+  category String @default("Community")
+  cover    String @default("")
+  avatar   String @default("")
+  bio      String @default("")
+  likes    Int    @default(0)
+}
+
+model Report {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  reporterId   String   @db.ObjectId
+  reporter     User     @relation("Reporter", fields: [reporterId], references: [id])
+  targetUserId String?  @db.ObjectId
+  targetUser   User?    @relation("ReportedUser", fields: [targetUserId], references: [id])
+  target       String
+  reason       String
+  status       String   @default("open")
+  createdAt    DateTime @default(now())
+}
+
+model SiteSetting {
+  id                 String  @id @map("_id")
+  name               String  @default("OneBook")
+  maintenance        Boolean @default(false)
+  registrationOpen   Boolean @default(true)
+}
