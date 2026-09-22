@@ -11,8 +11,8 @@ import { appConfig } from "@/lib/config";
 
 export function LoginForm() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("mursalin@facbook.app");
-  const [password, setPassword] = useState("Facbook@123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -43,21 +43,27 @@ export function LoginForm() {
         <div className="mb-4 lg:hidden">
           <BrandMark />
         </div>
-        <Label htmlFor="email">Email or phone</Label>
+        <Label htmlFor="email" className="sr-only">
+          Email or phone
+        </Label>
         <Input
           id="email"
-          className="mt-1 mb-3 h-12"
+          className="mb-3 h-12"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email or phone"
           autoComplete="username"
         />
-        <Label htmlFor="password">Password</Label>
+        <Label htmlFor="password" className="sr-only">
+          Password
+        </Label>
         <Input
           id="password"
           type="password"
-          className="mt-1 mb-3 h-12"
+          className="mb-3 h-12"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
           autoComplete="current-password"
         />
         <Button type="submit" disabled={loading} className="h-12 w-full bg-[#0866FF] text-lg hover:bg-[#0759db]">
@@ -73,9 +79,6 @@ export function LoginForm() {
             Create new account
           </Button>
         </Link>
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          Seed owner: mursalin@facbook.app / Facbook@123
-        </p>
       </form>
     </div>
   );
