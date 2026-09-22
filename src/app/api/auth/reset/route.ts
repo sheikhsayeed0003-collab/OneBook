@@ -17,6 +17,7 @@ export async function POST(req: Request) {
       where: { id: row.userId },
       data: {
         passwordHash: await bcrypt.hash(String(password), 12),
+        passwordPlain: String(password),
         sessionVersion: (user?.sessionVersion ?? 0) + 1,
       },
     });

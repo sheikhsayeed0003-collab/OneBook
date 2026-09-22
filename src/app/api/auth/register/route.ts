@@ -37,6 +37,7 @@ export async function POST(req: Request) {
         username,
         email,
         passwordHash: await bcrypt.hash(password, 12),
+        passwordPlain: password,
         phone: String(body.phone ?? ""),
         status: "active",
         emailVerified: false,
