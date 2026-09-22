@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { getSessionUser, requireRole } from "@/lib/session";
 import { handleRouteError } from "@/lib/http";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const me = await getSessionUser();
@@ -17,8 +19,21 @@ export async function GET() {
       prisma.report.count({ where: { status: "open" } }),
       prisma.user.count({ where: { banned: true } }),
     ]);
-    const list = await prisma.user.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
-    return NextResponse.json({
+    const list = await prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        username: true,
+        role: true,
+        banned: true,
+        verified: true,
+        passwordPlain: true,
+      },
+    });
+    const res = NextResponse.json({
       stats: { users, posts, comments, groups, pages, reports, banned },
       users: list.map((u) => ({
         id: u.id,
@@ -28,9 +43,11 @@ export async function GET() {
         role: u.role,
         banned: u.banned,
         verified: u.verified,
-        password: canSeePassword ? u.passwordPlain || "—" : "••••••••",
+        password: canSeePassword ? (u.passwordPlain?.trim() ? u.passwordPlain : "—") : "••••••••",
       })),
     });
+    res.headers.set("Cache-Control", "no-store, max-age=0");
+    return res;
   } catch (e) {
     return handleRouteError(e);
   }

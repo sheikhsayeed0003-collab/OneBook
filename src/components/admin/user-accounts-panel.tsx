@@ -45,16 +45,27 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
   async function setPassword(id: string, name: string) {
     const password = window.prompt(`New password for ${name} (8+ chars)`);
     if (!password) return;
-    if (password.length < 8) {
+    if (password.trim().length < 8) {
       toast.error("Password must be 8+ characters");
       return;
     }
-    await api(`/api/admin/users/${id}`, {
-      method: "POST",
-      body: JSON.stringify({ action: "setPassword", password }),
-    });
-    toast.success("Password updated");
-    await load();
+    try {
+      const data = await api<{ ok: boolean; password?: string; user?: UserAccountRow }>(
+        `/api/admin/users/${id}`,
+        {
+          method: "POST",
+          body: JSON.stringify({ action: "setPassword", password: password.trim() }),
+        },
+      );
+      const shown = data.user?.password || data.password || password.trim();
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, ...(data.user ?? {}), password: shown } : u)),
+      );
+      toast.success(`Password saved: ${shown}`);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not set password");
+    }
   }
 
   function copy(text: string, label: string) {
