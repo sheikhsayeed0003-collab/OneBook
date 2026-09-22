@@ -10,7 +10,7 @@ export type UserAccountRow = {
   id: string;
   name: string;
   email: string;
-  password: string;
+  plainPassword: string;
   role: string;
   banned: boolean;
   verified: boolean;
@@ -19,13 +19,20 @@ export type UserAccountRow = {
 
 export function UserAccountsPanel({ title = "User accounts" }: { title?: string }) {
   const [users, setUsers] = useState<UserAccountRow[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
 
   async function load() {
     try {
-      const data = await api<{ users: UserAccountRow[] }>("/api/admin/stats");
-      setUsers(data.users);
+      const data = await api<{ users: UserAccountRow[] }>(`/api/admin/stats?t=${Date.now()}`);
+      const rows = (data.users ?? []).map((u) => ({
+        ...u,
+        plainPassword: u.plainPassword ?? "",
+      }));
+      setUsers(rows);
+      setDrafts(Object.fromEntries(rows.map((u) => [u.id, u.plainPassword || ""])));
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Forbidden");
@@ -42,34 +49,34 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
     await load();
   }
 
-  async function setPassword(id: string, name: string) {
-    const password = window.prompt(`New password for ${name} (8+ chars)`);
-    if (!password) return;
-    if (password.trim().length < 8) {
+  async function savePassword(id: string, name: string) {
+    const next = (drafts[id] ?? "").trim();
+    if (next.length < 8) {
       toast.error("Password must be 8+ characters");
       return;
     }
+    setSaving(id);
     try {
-      const data = await api<{ ok: boolean; password?: string; user?: UserAccountRow }>(
+      const data = await api<{ ok: boolean; plainPassword?: string; user?: UserAccountRow }>(
         `/api/admin/users/${id}`,
         {
           method: "POST",
-          body: JSON.stringify({ action: "setPassword", password: password.trim() }),
+          body: JSON.stringify({ action: "setPassword", plainPassword: next, password: next }),
         },
       );
-      const shown = data.user?.password || data.password || password.trim();
-      setUsers((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, ...(data.user ?? {}), password: shown } : u)),
-      );
-      toast.success(`Password saved: ${shown}`);
-      await load();
+      const shown = (data.plainPassword || data.user?.plainPassword || next).trim();
+      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, plainPassword: shown } : u)));
+      setDrafts((prev) => ({ ...prev, [id]: shown }));
+      toast.success(`${name} password: ${shown}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not set password");
+      toast.error(e instanceof Error ? e.message : "Could not save password");
+    } finally {
+      setSaving(null);
     }
   }
 
   function copy(text: string, label: string) {
-    if (!text || text === "—" || text === "••••••••") {
+    if (!text) {
       toast.message("Nothing to copy");
       return;
     }
@@ -90,8 +97,7 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
     <section className="rounded-xl bg-card p-4 shadow-sm">
       <h2 className="text-lg font-semibold">{title}</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        প্রতিটি ইউজারের <strong>Name</strong>, <strong>Email</strong>, <strong>Password</strong> এখানে দেখাবে।
-        Password খালি (—) হলে <strong>Set password</strong> চাপো, অথবা ইউজার একবার লগইন করলে সেভ হবে।
+        Name, Email, Password — পাসওয়ার্ড বক্সে দেখাবে। খালি থাকলে লিখে <strong>Save</strong> চাপো।
       </p>
       {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
       <Input
@@ -122,13 +128,10 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
                 <Button size="sm" variant="secondary" onClick={() => act(u.id, u.banned ? "unban" : "ban")}>
                   {u.banned ? "Unban" : "Ban"}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => void setPassword(u.id, u.name)}>
-                  Set password
-                </Button>
               </div>
             </div>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="mt-3 space-y-2">
               <div className="rounded-md bg-muted/60 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</p>
@@ -144,20 +147,46 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
                 </div>
                 <p className="break-all font-mono text-sm">{u.email}</p>
               </div>
-              <div className="rounded-md bg-muted/60 px-3 py-2">
+
+              <div className="rounded-md border border-[#0866FF]/30 bg-[#0866FF]/5 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Password</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-[#0866FF]">Password</p>
                   <Button
                     type="button"
                     size="sm"
                     variant="ghost"
                     className="h-7 px-2 text-xs"
-                    onClick={() => copy(u.password, "Password")}
+                    onClick={() => copy(drafts[u.id] || u.plainPassword, "Password")}
                   >
                     Copy
                   </Button>
                 </div>
-                <p className="break-all font-mono text-sm">{u.password}</p>
+                <div className="mt-1 flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    type="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="h-11 flex-1 bg-white font-mono text-base text-black"
+                    placeholder="Type password here (8+ chars)"
+                    value={drafts[u.id] ?? ""}
+                    onChange={(e) => setDrafts((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                  />
+                  <Button
+                    type="button"
+                    className="h-11 shrink-0 bg-[#0866FF] text-white"
+                    disabled={saving === u.id}
+                    onClick={() => void savePassword(u.id, u.name)}
+                  >
+                    {saving === u.id ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+                {u.plainPassword ? (
+                  <p className="mt-2 break-all text-sm font-semibold text-green-700">
+                    Saved password: {u.plainPassword}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-amber-700">Not saved yet — type above and press Save</p>
+                )}
               </div>
             </div>
           </li>

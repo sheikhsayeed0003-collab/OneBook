@@ -6,6 +6,8 @@ import { jsonError } from "@/lib/serialize";
 import { handleRouteError } from "@/lib/http";
 import type { Prisma } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const me = await getSessionUser();
@@ -18,37 +20,34 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (user.role === "owner" && me.role !== "owner") return jsonError("Cannot modify owner", 403);
 
     if (body.action === "setPassword") {
-      const next = String(body.password ?? "").trim();
+      const next = String(body.password ?? body.plainPassword ?? "").trim();
       if (next.length < 8) return jsonError("Password must be 8+ characters");
+      const hash = await bcrypt.hash(next, 12);
       const updated = await prisma.user.update({
         where: { id },
         data: {
-          passwordHash: await bcrypt.hash(next, 12),
+          passwordHash: hash,
           passwordPlain: next,
         },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          username: true,
-          role: true,
-          banned: true,
-          verified: true,
-          passwordPlain: true,
-        },
       });
+      // Re-read to confirm Mongo wrote the plain field
+      const check = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, name: true, email: true, username: true, role: true, banned: true, verified: true, passwordPlain: true },
+      });
+      const plain = check?.passwordPlain || updated.passwordPlain || next;
       return NextResponse.json({
         ok: true,
-        password: updated.passwordPlain,
+        plainPassword: plain,
         user: {
-          id: updated.id,
-          name: updated.name,
-          email: updated.email,
-          username: updated.username,
-          role: updated.role,
-          banned: updated.banned,
-          verified: updated.verified,
-          password: updated.passwordPlain,
+          id: check?.id ?? updated.id,
+          name: check?.name ?? updated.name,
+          email: check?.email ?? updated.email,
+          username: check?.username ?? updated.username,
+          role: check?.role ?? updated.role,
+          banned: check?.banned ?? updated.banned,
+          verified: check?.verified ?? updated.verified,
+          plainPassword: plain,
         },
       });
     }

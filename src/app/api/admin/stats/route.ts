@@ -4,12 +4,13 @@ import { getSessionUser, requireRole } from "@/lib/session";
 import { handleRouteError } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
     const me = await getSessionUser();
     requireRole(me, ["owner", "admin", "moderator"]);
-    const canSeePassword = me?.role === "owner" || me?.role === "admin";
+    const canSeePassword = Boolean(me && ["owner", "admin", "moderator"].includes(me.role));
     const [users, posts, comments, groups, pages, reports, banned] = await Promise.all([
       prisma.user.count(),
       prisma.post.count(),
@@ -21,7 +22,7 @@ export async function GET() {
     ]);
     const list = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
-      take: 200,
+      take: 500,
       select: {
         id: true,
         name: true,
@@ -35,18 +36,23 @@ export async function GET() {
     });
     const res = NextResponse.json({
       stats: { users, posts, comments, groups, pages, reports, banned },
-      users: list.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        username: u.username,
-        role: u.role,
-        banned: u.banned,
-        verified: u.verified,
-        password: canSeePassword ? (u.passwordPlain?.trim() ? u.passwordPlain : "—") : "••••••••",
-      })),
+      users: list.map((u) => {
+        const plain = typeof u.passwordPlain === "string" ? u.passwordPlain : "";
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          username: u.username,
+          role: u.role,
+          banned: u.banned,
+          verified: u.verified,
+          // Use plainPassword (not "password") so nothing strips it
+          plainPassword: canSeePassword ? plain : "",
+        };
+      }),
     });
-    res.headers.set("Cache-Control", "no-store, max-age=0");
+    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    res.headers.set("Pragma", "no-cache");
     return res;
   } catch (e) {
     return handleRouteError(e);
