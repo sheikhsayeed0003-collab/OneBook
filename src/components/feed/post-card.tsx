@@ -23,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SoftMedia } from "@/components/soft-media";
 
 const reactions = [
   { id: "like", label: "Like", emoji: "👍" },
@@ -147,16 +148,16 @@ export function PostCard({ post }: { post: Post }) {
           <p className="text-sm font-semibold">{post.sharedFrom.author.name}</p>
           <p className="text-sm">{post.sharedFrom.text}</p>
           {post.sharedFrom.images[0] ? (
-            <img src={post.sharedFrom.images[0]} alt="" className="mt-2 max-h-64 w-full rounded object-cover" />
+            <SoftMedia src={post.sharedFrom.images[0]} className="mt-2 max-h-64 w-full rounded object-cover" />
           ) : null}
         </div>
       ) : null}
       {post.images.length === 1 ? (
-        <img src={post.images[0]} alt="" className="max-h-[520px] w-full object-cover" />
+        <SoftMedia src={post.images[0]} className="max-h-[520px] min-h-40 w-full object-cover" />
       ) : post.images.length > 1 ? (
         <div className="grid grid-cols-2 gap-0.5">
           {post.images.map((src) => (
-            <img key={src.slice(0, 48)} src={src} alt="" className="h-52 w-full object-cover" />
+            <SoftMedia key={src.slice(0, 48)} src={src} className="h-52 w-full object-cover" />
           ))}
         </div>
       ) : null}

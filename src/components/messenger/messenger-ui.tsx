@@ -25,18 +25,38 @@ export function MessengerUI() {
   useEffect(() => {
     const cid = searchParams.get("c");
     api<{ conversations: Conversation[] }>("/api/conversations")
-      .then((d) => {
+      .then(async (d) => {
         setConversations(d.conversations);
         setActive(d.conversations.find((c) => c.id === cid) ?? d.conversations[0] ?? null);
+        const { kvSet } = await import("@/lib/offline");
+        await kvSet("conversationsCache", d);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed"));
+      .catch(async (e) => {
+        const { kvGet } = await import("@/lib/offline");
+        const cached = await kvGet<{ conversations: Conversation[] }>("conversationsCache");
+        if (cached?.conversations?.length) {
+          setConversations(cached.conversations);
+          setActive(cached.conversations.find((c) => c.id === cid) ?? cached.conversations[0] ?? null);
+          setError("Offline — showing saved chats. SMS will queue.");
+        } else {
+          setError(e instanceof Error ? e.message : "Failed");
+        }
+      });
   }, [searchParams]);
 
   useEffect(() => {
     if (!active) return;
     api<{ messages: Message[] }>(`/api/conversations/${active.id}`)
-      .then((d) => setMsgs(d.messages))
-      .catch(() => setMsgs([]));
+      .then(async (d) => {
+        setMsgs(d.messages);
+        const { kvSet } = await import("@/lib/offline");
+        await kvSet(`msgs:${active.id}`, d.messages);
+      })
+      .catch(async () => {
+        const { kvGet } = await import("@/lib/offline");
+        const cached = await kvGet<Message[]>(`msgs:${active.id}`);
+        setMsgs(cached ?? []);
+      });
   }, [active?.id]);
 
   return (

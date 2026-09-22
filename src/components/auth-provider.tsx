@@ -4,6 +4,8 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { Role, User } from "@/lib/types";
 
+const USER_KEY = "onebook_user";
+
 type AuthState = {
   user: User | null;
   ready: boolean;
@@ -24,6 +26,25 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+function readCachedUser(): User | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as User;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedUser(u: User | null) {
+  try {
+    if (u) localStorage.setItem(USER_KEY, JSON.stringify(u));
+    else localStorage.removeItem(USER_KEY);
+  } catch {
+    /* ignore quota */
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
@@ -33,12 +54,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await api<{ user: User }>("/api/auth/me");
       setUser(data.user);
+      writeCachedUser(data.user);
     } catch {
+      // Keep last known session offline so the app shell stays usable
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const cached = readCachedUser();
+        if (cached) {
+          setUser(cached);
+          return;
+        }
+      }
       setUser(null);
+      writeCachedUser(null);
     }
   };
 
   useEffect(() => {
+    const cached = readCachedUser();
+    if (cached) setUser(cached);
     refresh().finally(() => setReady(true));
   }, []);
 
@@ -54,6 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({ email, password }),
         });
         setUser(data.user);
+        writeCachedUser(data.user);
       },
       register: async (input) => {
         setError(null);
@@ -62,19 +96,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify(input),
         });
         setUser(data.user);
+        writeCachedUser(data.user);
       },
       logout: async () => {
-        await api("/api/auth/logout", { method: "POST" });
-        setUser(null);
+        try {
+          if (navigator.onLine) await api("/api/auth/logout", { method: "POST" });
+        } finally {
+          setUser(null);
+          writeCachedUser(null);
+        }
       },
       refresh,
-      setRole: (role) => setUser((u) => (u ? { ...u, role } : u)),
+      setRole: (role) =>
+        setUser((u) => {
+          const next = u ? { ...u, role } : u;
+          writeCachedUser(next);
+          return next;
+        }),
       updateUser: async (patch) => {
+        if (!navigator.onLine) {
+          setUser((u) => {
+            const next = u ? { ...u, ...patch } : u;
+            writeCachedUser(next);
+            return next;
+          });
+          return;
+        }
         const data = await api<{ user: User }>("/api/users", {
           method: "PATCH",
           body: JSON.stringify(patch),
         });
         setUser(data.user);
+        writeCachedUser(data.user);
       },
     }),
     [user, ready, error],

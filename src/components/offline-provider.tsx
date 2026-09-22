@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { enqueue, kvSet, listPending, processQueue, type SyncOp } from "@/lib/offline";
+import { enqueue, kvGet, kvSet, listPending, processQueue } from "@/lib/offline";
 import { toast } from "sonner";
 
 type NetStatus = "online" | "offline" | "syncing" | "synced";
@@ -18,9 +18,14 @@ type OfflineState = {
 const OfflineContext = createContext<OfflineState | null>(null);
 
 export function OfflineProvider({ children }: { children: React.ReactNode }) {
-  const [online, setOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [online, setOnline] = useState(true);
   const [status, setStatus] = useState<NetStatus>("online");
   const [pending, setPending] = useState(0);
+
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    setStatus(navigator.onLine ? "online" : "offline");
+  }, []);
 
   const refreshPending = useCallback(async () => {
     try {
@@ -42,7 +47,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       await refreshPending();
       if (r.synced > 0) toast.success(`Synced ${r.synced} change${r.synced === 1 ? "" : "s"}`);
       if (r.failed > 0) toast.error(`${r.failed} sync failed — will retry`);
-      setStatus(navigator.onLine ? "synced" : "offline");
+      setStatus("synced");
     } catch {
       setStatus(navigator.onLine ? "online" : "offline");
     }
@@ -52,12 +57,13 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     const on = () => {
       setOnline(true);
       setStatus("online");
+      toast.message("Back online — syncing…");
       void syncNow();
     };
     const off = () => {
       setOnline(false);
       setStatus("offline");
-      toast.message("You're offline — changes will sync later");
+      toast.message("Offline — SMS will queue. Photos/videos won't load.");
     };
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
@@ -66,6 +72,9 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker.addEventListener("message", (ev) => {
+        if (ev.data?.type === "SYNC") void syncNow();
+      });
     }
     return () => {
       window.removeEventListener("online", on);
@@ -102,38 +111,48 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     [status, pending, online, syncNow, refreshPending],
   );
 
-  // Cache feed snapshot when online for offline shell
   useEffect(() => {
     if (!online) return;
     fetch("/api/posts", { credentials: "include" })
       .then((r) => r.json())
       .then((d) => kvSet("feedCache", d))
       .catch(() => {});
+    fetch("/api/conversations", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => kvSet("conversationsCache", d))
+      .catch(() => {});
   }, [online, status]);
 
   return (
     <OfflineContext.Provider value={value}>
       {children}
-      <SyncBadge status={status} pending={pending} />
+      <SyncBadge status={status} pending={pending} online={online} />
     </OfflineContext.Provider>
   );
 }
 
-function SyncBadge({ status, pending }: { status: NetStatus; pending: number }) {
-  if (status === "synced" && pending === 0) return null;
-  const label =
-    status === "offline"
-      ? pending
-        ? `Offline · ${pending} waiting`
-        : "Offline"
-      : status === "syncing"
-        ? "Syncing…"
-        : pending
-          ? `${pending} pending`
-          : "All changes saved";
+function SyncBadge({
+  status,
+  pending,
+  online,
+}: {
+  status: NetStatus;
+  pending: number;
+  online: boolean;
+}) {
+  if (online && status === "synced" && pending === 0) return null;
+  const label = !online
+    ? pending
+      ? `Offline · ${pending} SMS waiting`
+      : "Offline · SMS ok · no photos"
+    : status === "syncing"
+      ? "Syncing…"
+      : pending
+        ? `${pending} pending`
+        : "All changes saved";
   return (
     <div
-      className="pointer-events-none fixed bottom-16 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[#0866FF] px-3 py-1 text-xs font-medium text-white shadow-lg md:bottom-4"
+      className="pointer-events-none fixed bottom-16 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[#0866FF] px-3 py-1.5 text-xs font-medium text-white shadow-lg md:bottom-4"
       role="status"
     >
       {label}
@@ -147,7 +166,6 @@ export function useOffline() {
   return ctx;
 }
 
-/** Safe optional hook when provider may be absent */
 export function useOfflineOptional() {
   return useContext(OfflineContext);
 }
