@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PageHero, StatCard } from "@/components/page-hero";
-import { UserAccountsPanel } from "@/components/admin/user-accounts-panel";
+import { UserManagementPanel } from "@/components/admin/user-management-panel";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -34,12 +34,12 @@ export default function OwnerPage() {
 
   return (
     <div className="space-y-4">
-      <PageHero title="Owner console" subtitle="System configuration, users, and security" />
+      <PageHero title="Owner console" subtitle="System configuration, users, security, and admin policy" />
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Site" value={name} />
         <StatCard label="Total users" value={String(stats.users ?? 0)} />
-        <StatCard label="Banned" value={String(stats.banned ?? 0)} />
+        <StatCard label="Suspended" value={String(stats.banned ?? 0)} />
         <StatCard label="Reports" value={String(stats.reports ?? 0)} />
       </div>
       <section className="space-y-3 rounded-xl bg-card p-4 shadow-sm">
@@ -67,7 +67,7 @@ export default function OwnerPage() {
         </Button>
       </section>
 
-      <UserAccountsPanel title="All users (name · email · password)" />
+      <UserManagementPanel variant="owner" />
     </div>
   );
 }

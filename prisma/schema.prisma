@@ -8,27 +8,30 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  email        String   @unique
-  username     String   @unique
-  name         String
-  passwordHash String
-  /// Admin-panel readable copy (still hashed for login). Empty until set/login/register.
-  passwordPlain String  @default("")
-  bio          String   @default("")
-  about        String   @default("")
-  location     String   @default("")
-  website      String   @default("")
-  avatar       String   @default("")
-  cover        String   @default("")
-  phone        String   @default("")
-  role         String   @default("user")
-  verified     Boolean  @default(false)
-  banned       Boolean  @default(false)
-  twoFactor    Boolean  @default(false)
-  privacyPrefs String   @default("{}")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  email          String    @unique
+  username       String    @unique
+  name           String
+  passwordHash   String
+  bio            String    @default("")
+  about          String    @default("")
+  location       String    @default("")
+  website        String    @default("")
+  avatar         String    @default("")
+  cover          String    @default("")
+  phone          String    @default("")
+  role           String    @default("user")
+  /// active | suspended | disabled
+  status         String    @default("active")
+  verified       Boolean   @default(false)
+  emailVerified  Boolean   @default(false)
+  banned         Boolean   @default(false)
+  twoFactor      Boolean   @default(false)
+  privacyPrefs   String    @default("{}")
+  sessionVersion Int       @default(0)
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   posts         Post[]
   comments      Comment[]
@@ -51,6 +54,22 @@ model User {
   reportsAbout  Report[]             @relation("ReportedUser")
   resetTokens   PasswordReset[]
   media         Media[]
+  auditActions  AdminAuditLog[]      @relation("AuditActor")
+}
+
+model AdminAuditLog {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  actorId    String   @db.ObjectId
+  actor      User     @relation("AuditActor", fields: [actorId], references: [id])
+  targetId   String?
+  action     String
+  detail     String   @default("")
+  result     String   @default("ok")
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetId])
+  @@index([createdAt])
 }
 
 model Media {
@@ -269,8 +288,10 @@ model Report {
 }
 
 model SiteSetting {
-  id                 String  @id @map("_id")
-  name               String  @default("OneBook")
-  maintenance        Boolean @default(false)
-  registrationOpen   Boolean @default(true)
+  id                   String  @id @map("_id")
+  name                 String  @default("OneBook")
+  maintenance          Boolean @default(false)
+  registrationOpen     Boolean @default(true)
+  /// JSON: adminCanCreateAdmin, adminCanDeleteUsers, adminCanChangeRoles, adminCanChangeEmail, adminCanResetPassword
+  adminPermissions     String  @default("{\"adminCanCreateAdmin\":false,\"adminCanDeleteUsers\":true,\"adminCanChangeRoles\":false,\"adminCanChangeEmail\":true,\"adminCanResetPassword\":true,\"adminCanChangeStatus\":true}")
 }

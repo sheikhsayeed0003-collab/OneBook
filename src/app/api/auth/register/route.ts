@@ -37,14 +37,15 @@ export async function POST(req: Request) {
         username,
         email,
         passwordHash: await bcrypt.hash(password, 12),
-        passwordPlain: password,
         phone: String(body.phone ?? ""),
+        status: "active",
+        emailVerified: false,
       },
     });
     const counts = await userCounts(user.id);
     void notifyTelegram(`🆕 Register\n${user.name} (@${user.username})\n${user.email}`);
     const res = NextResponse.json({ user: toPublicUser(user, counts) });
-    return attachSession(res, user.id);
+    return attachSession(res, user.id, user.sessionVersion ?? 0);
   } catch (e) {
     return handleRouteError(e);
   }

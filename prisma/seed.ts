@@ -9,50 +9,52 @@ async function main() {
 
   const owner = await prisma.user.upsert({
     where: { email: "mursalin@facbook.app" },
-    update: { passwordPlain: ownerPassword },
+    update: { role: "owner", status: "active", verified: true },
     create: {
       email: "mursalin@facbook.app",
       username: "mursalin",
       name: "Mursalin",
       passwordHash,
-      passwordPlain: ownerPassword,
       bio: "Building products. Coffee, cameras, and late-night feeds.",
       about: "Software engineer.",
       location: "Dhaka, Bangladesh",
       website: "https://facbook.app/mursalin",
       role: "owner",
+      status: "active",
       verified: true,
+      emailVerified: true,
     },
   });
 
   const aya = await prisma.user.upsert({
     where: { email: "aya@facbook.app" },
-    update: { passwordPlain: "Password@123" },
+    update: { status: "active" },
     create: {
       email: "aya@facbook.app",
       username: "aya.rahman",
       name: "Aya Rahman",
       passwordHash: await bcrypt.hash("Password@123", 12),
-      passwordPlain: "Password@123",
       bio: "Designer · city walks",
       location: "Chattogram",
       role: "user",
+      status: "active",
       verified: true,
+      emailVerified: true,
     },
   });
 
   const sara = await prisma.user.upsert({
     where: { email: "sara@facbook.app" },
-    update: { passwordPlain: "Password@123" },
+    update: { role: "admin", status: "active" },
     create: {
       email: "sara@facbook.app",
       username: "sara.n",
       name: "Sara Noor",
       passwordHash: await bcrypt.hash("Password@123", 12),
-      passwordPlain: "Password@123",
       bio: "Chef · home kitchen",
       location: "Khulna",
       role: "admin",
+      status: "active",
     },
   });
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PageHero, StatCard } from "@/components/page-hero";
-import { UserAccountsPanel } from "@/components/admin/user-accounts-panel";
+import { UserManagementPanel } from "@/components/admin/user-management-panel";
 import { api } from "@/lib/api";
 
 export default function AdminDashboard() {
@@ -26,9 +26,9 @@ export default function AdminDashboard() {
         <StatCard label="Open reports" value={String(stats.reports ?? 0)} />
         <StatCard label="Groups" value={String(stats.groups ?? 0)} />
         <StatCard label="Pages" value={String(stats.pages ?? 0)} />
-        <StatCard label="Banned" value={String(stats.banned ?? 0)} />
+        <StatCard label="Suspended" value={String(stats.banned ?? 0)} />
       </div>
-      <UserAccountsPanel />
+      <UserManagementPanel variant="admin" />
     </div>
   );
 }

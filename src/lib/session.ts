@@ -2,6 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { isAccountBlocked } from "@/lib/admin-auth";
 
 export const SESSION_COOKIE = "facbook_session";
 
@@ -13,8 +14,8 @@ function secret() {
   return new TextEncoder().encode(s);
 }
 
-export async function signSession(userId: string) {
-  return new SignJWT({ sub: userId })
+export async function signSession(userId: string, sessionVersion = 0) {
+  return new SignJWT({ sub: userId, sv: sessionVersion })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("14d")
@@ -29,14 +30,14 @@ const cookieOpts = {
   maxAge: 60 * 60 * 24 * 14,
 };
 
-export async function attachSession(res: NextResponse, userId: string) {
-  const token = await signSession(userId);
+export async function attachSession(res: NextResponse, userId: string, sessionVersion = 0) {
+  const token = await signSession(userId, sessionVersion);
   res.cookies.set(SESSION_COOKIE, token, cookieOpts);
   return res;
 }
 
-export async function setSessionCookie(userId: string) {
-  const token = await signSession(userId);
+export async function setSessionCookie(userId: string, sessionVersion = 0) {
+  const token = await signSession(userId, sessionVersion);
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, cookieOpts);
 }
@@ -60,7 +61,10 @@ export async function getSessionUser() {
     const id = payload.sub;
     if (!id) return null;
     const user = await prisma.user.findUnique({ where: { id } });
-    if (!user || user.banned) return null;
+    if (!user || isAccountBlocked(user)) return null;
+    const sv = typeof payload.sv === "number" ? payload.sv : 0;
+    const current = user.sessionVersion ?? 0;
+    if (sv !== current) return null;
     return user;
   } catch {
     return null;

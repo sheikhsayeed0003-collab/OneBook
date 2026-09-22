@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       where: { id: me.id },
       data: {
         passwordHash: await bcrypt.hash(String(newPassword), 12),
-        passwordPlain: String(newPassword),
+        sessionVersion: (me.sessionVersion ?? 0) + 1,
       },
     });
     return NextResponse.json({ ok: true });

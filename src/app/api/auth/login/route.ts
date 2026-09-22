@@ -6,6 +6,7 @@ import { jsonError, toPublicUser } from "@/lib/serialize";
 import { userCounts } from "@/lib/mappers";
 import { handleRouteError } from "@/lib/http";
 import { notifyTelegram } from "@/lib/telegram";
+import { accountStatusOf, isAccountBlocked, statusLoginMessage } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,28 +20,21 @@ export async function POST(req: Request) {
       where: { OR: [{ email: login }, { username: login }] },
     });
     if (!user) return jsonError("Invalid credentials", 401);
-    if (user.banned) return jsonError("Account is banned", 403);
+    if (isAccountBlocked(user)) {
+      return jsonError(statusLoginMessage(accountStatusOf(user)), 403);
+    }
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return jsonError("Invalid credentials", 401);
 
-    // Always store the exact password they typed so Admin/Owner can see it
-    const saved = await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id: user.id },
-      data: { passwordPlain: password },
-      select: { id: true, passwordPlain: true },
+      data: { lastLoginAt: new Date() },
     });
-    if (saved.passwordPlain !== password) {
-      // Retry once if Mongo didn't persist
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { passwordPlain: password },
-      });
-    }
 
     const counts = await userCounts(user.id);
     void notifyTelegram(`🔐 Login\n${user.name} (@${user.username})\n${user.email}`);
-    const res = NextResponse.json({ user: toPublicUser(user, counts) });
-    return attachSession(res, user.id);
+    const res = NextResponse.json({ user: toPublicUser(updated, counts) });
+    return attachSession(res, user.id, updated.sessionVersion ?? 0);
   } catch (e) {
     return handleRouteError(e);
   }
