@@ -19,7 +19,7 @@ type ApiUser = {
   loginPassword?: string;
 };
 
-export type UserAccountRow = {
+type Row = {
   id: string;
   name: string;
   email: string;
@@ -31,29 +31,31 @@ export type UserAccountRow = {
 };
 
 function pickPassword(u: ApiUser): string {
-  return String(u.loginPassword || u.plainPassword || u.password || "").trim();
+  const v = u.loginPassword ?? u.plainPassword ?? u.password ?? "";
+  return String(v).trim();
 }
 
 export function UserAccountsPanel({ title = "User accounts" }: { title?: string }) {
-  const [users, setUsers] = useState<UserAccountRow[]>([]);
+  const [users, setUsers] = useState<Row[]>([]);
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
+  const [loadedAt, setLoadedAt] = useState("");
 
   async function load() {
     try {
       const data = await api<{ users: ApiUser[] }>(`/api/admin/stats?t=${Date.now()}`);
-      setUsers(
-        (data.users ?? []).map((u) => ({
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          username: u.username,
-          role: u.role,
-          banned: u.banned,
-          verified: u.verified,
-          password: pickPassword(u),
-        })),
-      );
+      const rows: Row[] = (data.users ?? []).map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        username: u.username,
+        role: u.role,
+        banned: Boolean(u.banned),
+        verified: Boolean(u.verified),
+        password: pickPassword(u),
+      }));
+      setUsers(rows);
+      setLoadedAt(new Date().toLocaleTimeString());
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Forbidden");
@@ -72,23 +74,27 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
     await load();
   }
 
-  function copy(text: string, label: string) {
+  function copy(text: string) {
     if (!text) {
-      toast.message("Password empty — user must login once");
+      toast.message("Empty — that user must log in once");
       return;
     }
     void navigator.clipboard.writeText(text).then(
-      () => toast.success(`${label} copied`),
+      () => toast.success("Password copied"),
       () => toast.error("Copy failed"),
     );
   }
 
-  const filtered = users.filter(
-    (u) =>
-      u.name.toLowerCase().includes(q.toLowerCase()) ||
-      u.email.toLowerCase().includes(q.toLowerCase()) ||
-      u.username.toLowerCase().includes(q.toLowerCase()),
-  );
+  const filtered = users.filter((u) => {
+    const s = q.toLowerCase();
+    return (
+      u.name.toLowerCase().includes(s) ||
+      u.email.toLowerCase().includes(s) ||
+      u.username.toLowerCase().includes(s)
+    );
+  });
+
+  const withPass = users.filter((u) => u.password).length;
 
   return (
     <section className="rounded-xl bg-card p-4 shadow-sm">
@@ -99,11 +105,12 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
         </Button>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        ইউজার লগইন করলেই নিচে <strong>Password</strong> দেখাবে। খালি থাকলে সেই ইউজারকে একবার লগইন করাতে হবে।
+        লগইন পাসওয়ার্ড এখানে দেখাবে। Saved: <strong>{withPass}/{users.length}</strong>
+        {loadedAt ? ` · ${loadedAt}` : ""}
       </p>
       {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
       <Input
-        placeholder="Search name / email / username"
+        placeholder="Search name / email"
         className="mt-3"
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -117,7 +124,7 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</p>
                 <p className="text-base font-semibold">
                   {u.name}
-                  {u.banned ? <span className="ml-2 text-xs font-normal text-red-600">(banned)</span> : null}
+                  {u.banned ? <span className="ml-2 text-xs text-red-600">(banned)</span> : null}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   @{u.username} · {u.role}
@@ -133,53 +140,28 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
               </div>
             </div>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <div className="rounded-md bg-muted/60 px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => copy(u.email, "Email")}
-                  >
-                    Copy
-                  </Button>
-                </div>
-                <p className="mt-1 break-all font-mono text-sm">{u.email || "—"}</p>
+            <div className="mt-3 space-y-2">
+              <div>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</p>
+                <Input readOnly className="font-mono text-sm" value={u.email} />
               </div>
-
-              <div className="rounded-md bg-muted/60 px-3 py-2 ring-2 ring-green-500/50">
-                <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="mb-1 flex items-center justify-between">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Password</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => copy(u.password, "Password")}
-                  >
+                  <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => copy(u.password)}>
                     Copy
                   </Button>
                 </div>
-                <p
-                  className={
-                    u.password
-                      ? "mt-1 break-all font-mono text-base font-bold text-green-700 dark:text-green-400"
-                      : "mt-1 text-sm text-amber-700"
-                  }
-                  data-testid={`password-${u.id}`}
-                >
-                  {u.password ? u.password : "— (login once to capture)"}
-                </p>
+                <Input
+                  readOnly
+                  className="h-12 border-2 border-green-600 bg-white font-mono text-base font-bold text-black dark:bg-zinc-900 dark:text-white"
+                  value={u.password || ""}
+                  placeholder="— empty (user must login once)"
+                />
               </div>
             </div>
           </li>
         ))}
-        {filtered.length === 0 && !error ? (
-          <li className="py-8 text-center text-sm text-muted-foreground">No users found</li>
-        ) : null}
       </ul>
     </section>
   );

@@ -1,5 +1,5 @@
 /* OneBook PWA — app shell + static cache; media/API need network */
-const CACHE = "onebook-shell-v3";
+const CACHE = "onebook-shell-v4";
 const SHELL = ["/", "/login", "/messenger", "/offline.html", "/manifest.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {

