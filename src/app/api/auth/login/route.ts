@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
     const updated = await prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date(), passwordPlain: password },
+      data: { lastLoginAt: new Date() },
     });
 
     const counts = await userCounts(user.id);

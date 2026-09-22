@@ -109,9 +109,6 @@ export function canCreateAdmin(actor: { role: string }, perms: AdminPermissions)
 }
 
 export function serializeAdminUser(u: DbUser) {
-  const plain = typeof (u as { passwordPlain?: string }).passwordPlain === "string"
-    ? String((u as { passwordPlain?: string }).passwordPlain)
-    : "";
   return {
     id: u.id,
     name: u.name,
@@ -124,7 +121,5 @@ export function serializeAdminUser(u: DbUser) {
     createdAt: u.createdAt.toISOString(),
     updatedAt: u.updatedAt.toISOString(),
     lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
-    /** Login password for Owner/Admin panel only */
-    password: plain,
   };
 }

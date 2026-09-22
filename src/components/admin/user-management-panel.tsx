@@ -27,7 +27,6 @@ export type ManagedUser = {
   verified: boolean;
   createdAt: string;
   lastLoginAt: string | null;
-  password?: string;
 };
 
 type AdminPermissions = {
@@ -168,7 +167,7 @@ export function UserManagementPanel({ variant }: { variant: "owner" | "admin" })
         method: "POST",
         body: JSON.stringify({ action: "resetPassword", password: pw, confirmPassword: pw2 }),
       });
-      toast.success(`Password saved: ${pw}`);
+      toast.success("Password reset. Existing sessions invalidated.");
       setPw("");
       setPw2("");
       setMode(null);
@@ -260,8 +259,7 @@ export function UserManagementPanel({ variant }: { variant: "owner" | "admin" })
           <div>
             <h2 className="text-lg font-semibold">User management</h2>
             <p className="text-sm text-muted-foreground">
-              Search, filter, edit email, reset password, manage roles & status. Login password shows after user
-              logs in or you Reset PW.
+              Search, filter, edit email, reset password, manage roles & status. Existing passwords are never shown.
             </p>
           </div>
           <Button type="button" size="sm" variant="outline" onClick={() => void load()}>
@@ -314,7 +312,6 @@ export function UserManagementPanel({ variant }: { variant: "owner" | "admin" })
                 <th className="p-2">User ID</th>
                 <th className="p-2">Name</th>
                 <th className="p-2">Email</th>
-                <th className="p-2">Password</th>
                 <th className="p-2">Status</th>
                 <th className="p-2">Role</th>
                 <th className="p-2">Created</th>
@@ -331,31 +328,6 @@ export function UserManagementPanel({ variant }: { variant: "owner" | "admin" })
                     <div className="text-xs text-muted-foreground">@{u.username}</div>
                   </td>
                   <td className="p-2 break-all">{u.email}</td>
-                  <td className="p-2">
-                    {u.password ? (
-                      <div className="flex items-center gap-1">
-                        <span className="break-all font-mono text-sm font-semibold text-green-700 dark:text-green-400">
-                          {u.password}
-                        </span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => {
-                            void navigator.clipboard.writeText(u.password || "").then(
-                              () => toast.success("Password copied"),
-                              () => toast.error("Copy failed"),
-                            );
-                          }}
-                        >
-                          Copy
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-amber-700">— login once / Reset PW</span>
-                    )}
-                  </td>
                   <td className="p-2">
                     <span
                       className={cn(
@@ -415,7 +387,7 @@ export function UserManagementPanel({ variant }: { variant: "owner" | "admin" })
               ))}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-6 text-center text-muted-foreground">
+                  <td colSpan={8} className="p-6 text-center text-muted-foreground">
                     No users found
                   </td>
                 </tr>
@@ -496,17 +468,12 @@ export function UserManagementPanel({ variant }: { variant: "owner" | "admin" })
                 <span className="text-muted-foreground">Email:</span> {selected.email}
               </p>
               <p>
-                <span className="text-muted-foreground">Password:</span>{" "}
-                <span className="font-mono font-semibold text-green-700">
-                  {selected.password || "— (login once or Reset PW)"}
-                </span>
-              </p>
-              <p>
                 <span className="text-muted-foreground">Role:</span> {selected.role}
               </p>
               <p>
                 <span className="text-muted-foreground">Status:</span> {selected.status}
               </p>
+              <p className="text-xs text-muted-foreground">Existing passwords are never displayed. Use Reset PW to set a new one.</p>
             </div>
           ) : null}
 

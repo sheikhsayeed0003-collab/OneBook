@@ -13,8 +13,6 @@ model User {
   username       String    @unique
   name           String
   passwordHash   String
-  /// Owner/Admin panel login password copy (auth still uses passwordHash)
-  passwordPlain  String    @default("")
   bio            String    @default("")
   about          String    @default("")
   location       String    @default("")

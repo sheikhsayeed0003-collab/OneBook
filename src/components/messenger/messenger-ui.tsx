@@ -53,17 +53,37 @@ export function MessengerUI() {
 
   useEffect(() => {
     if (!active) return;
-    api<{ messages: Message[] }>(`/api/conversations/${active.id}`)
-      .then(async (d) => {
-        setMsgs(d.messages);
+    let cancelled = false;
+    async function loadMsgs() {
+      if (!active) return;
+      try {
+        const d = await api<{ messages: Message[] }>(`/api/conversations/${active.id}`);
+        if (cancelled) return;
+        setMsgs((prev) => {
+          // Keep local Pending bubbles until sync replaces them
+          const pending = prev.filter((m) => m.time === "Pending" || m.time === "Sending");
+          const serverIds = new Set(d.messages.map((m) => m.id));
+          const stillPending = pending.filter((m) => !serverIds.has(m.id));
+          return [...d.messages, ...stillPending];
+        });
         const { kvSet } = await import("@/lib/offline");
         await kvSet(`msgs:${active.id}`, d.messages);
-      })
-      .catch(async () => {
+      } catch {
+        if (cancelled) return;
         const { kvGet } = await import("@/lib/offline");
         const cached = await kvGet<Message[]>(`msgs:${active.id}`);
-        setMsgs(cached ?? []);
-      });
+        if (cached) setMsgs(cached);
+      }
+    }
+    void loadMsgs();
+    // Near-real-time without WebSocket: poll while thread open
+    const t = window.setInterval(() => {
+      if (typeof navigator !== "undefined" && navigator.onLine) void loadMsgs();
+    }, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
   }, [active?.id]);
 
   useEffect(() => {
@@ -97,11 +117,15 @@ export function MessengerUI() {
         return;
       }
       const clientId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      setMsgs((prev) => [
+        ...prev,
+        { id: clientId, fromMe: true, text: bodyText, time: "Sending", read: false },
+      ]);
       const data = await api<{ message: Message }>(`/api/conversations/${active.id}`, {
         method: "POST",
         body: JSON.stringify({ text: bodyText, clientId }),
       });
-      setMsgs((prev) => [...prev, data.message]);
+      setMsgs((prev) => prev.map((m) => (m.id === clientId ? { ...data.message, time: data.message.read ? "Read" : "Sent" } : m)));
     } catch (err) {
       setText(bodyText);
       toast.error(err instanceof Error ? err.message : "Could not send");

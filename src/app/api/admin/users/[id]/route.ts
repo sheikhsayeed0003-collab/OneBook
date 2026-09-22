@@ -187,7 +187,6 @@ export async function POST(req: Request, ctx: Ctx) {
         where: { id },
         data: {
           passwordHash: hash,
-          passwordPlain: next,
           sessionVersion: (target.sessionVersion ?? 0) + 1,
         },
       });
@@ -197,7 +196,7 @@ export async function POST(req: Request, ctx: Ctx) {
         action: "reset_password",
         detail: "password reset",
       });
-      return NextResponse.json({ ok: true, password: next });
+      return NextResponse.json({ ok: true });
     }
 
     if (action === "ban" || action === "suspend") {

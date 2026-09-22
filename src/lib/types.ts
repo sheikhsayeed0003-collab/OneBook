@@ -82,6 +82,7 @@ export type Message = {
   text: string;
   time: string;
   read: boolean;
+  status?: "Pending" | "Sending" | "Sent" | "Delivered" | "Read";
 };
 
 export type Group = {

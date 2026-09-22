@@ -32,6 +32,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         text: m.text,
         time: relativeTime(m.createdAt),
         read: m.read,
+        status: m.senderId === me.id ? (m.read ? "Read" : "Sent") : undefined,
       })),
     });
   } catch (e) {
