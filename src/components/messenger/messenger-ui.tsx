@@ -9,9 +9,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import type { Conversation, Message } from "@/lib/types";
+import { useOfflineOptional } from "@/components/offline-provider";
+import { toast } from "sonner";
 
 export function MessengerUI() {
   const searchParams = useSearchParams();
+  const offline = useOfflineOptional();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [active, setActive] = useState<Conversation | null>(null);
   const [msgs, setMsgs] = useState<Message[]>([]);
@@ -110,12 +113,33 @@ export function MessengerUI() {
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!text.trim() || !active) return;
+                const bodyText = text.trim();
+                setText("");
+                if (!navigator.onLine) {
+                  const clientId = offline
+                    ? await offline.queueMessage(active.id, bodyText)
+                    : `msg_${Date.now()}`;
+                  if (!offline) {
+                    const { enqueue } = await import("@/lib/offline");
+                    await enqueue({
+                      id: clientId,
+                      type: "sendMessage",
+                      payload: { conversationId: active.id, text: bodyText, clientId },
+                    });
+                  }
+                  setMsgs((prev) => [
+                    ...prev,
+                    { id: clientId, fromMe: true, text: bodyText, time: "Pending", read: false },
+                  ]);
+                  toast.message("Message queued — will send when online");
+                  return;
+                }
+                const clientId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                 const data = await api<{ message: Message }>(`/api/conversations/${active.id}`, {
                   method: "POST",
-                  body: JSON.stringify({ text }),
+                  body: JSON.stringify({ text: bodyText, clientId }),
                 });
                 setMsgs((prev) => [...prev, data.message]);
-                setText("");
               }}
             >
               <Input

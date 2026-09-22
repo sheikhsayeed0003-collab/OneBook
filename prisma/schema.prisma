@@ -48,6 +48,16 @@ model User {
   reportsMade   Report[]             @relation("Reporter")
   reportsAbout  Report[]             @relation("ReportedUser")
   resetTokens   PasswordReset[]
+  media         Media[]
+}
+
+model Media {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId   String   @db.ObjectId
+  owner     User     @relation(fields: [ownerId], references: [id])
+  mime      String
+  data      String
+  createdAt DateTime @default(now())
 }
 
 model PasswordReset {
@@ -160,6 +170,7 @@ model Message {
   senderId       String       @db.ObjectId
   sender         User         @relation(fields: [senderId], references: [id])
   text           String
+  clientId       String?
   read           Boolean      @default(false)
   createdAt      DateTime     @default(now())
 }

@@ -4,6 +4,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { api } from "@/lib/api";
 import type { Post, Privacy, Reaction } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
+import { useOfflineOptional } from "@/components/offline-provider";
+import { enqueue, fileToDataUrl, kvGet, newClientId } from "@/lib/offline";
+import { toast } from "sonner";
 
 type SocialState = {
   posts: Post[];
@@ -17,6 +20,7 @@ type SocialState = {
     privacy?: Privacy;
     feeling?: string;
     location?: string;
+    pendingFiles?: File[];
   }) => Promise<void>;
   updatePost: (id: string, patch: Partial<Pick<Post, "text" | "privacy" | "feeling" | "location" | "images">>) => Promise<void>;
   deletePost: (id: string) => Promise<void>;
@@ -32,6 +36,7 @@ const SocialContext = createContext<SocialState | null>(null);
 
 export function SocialProvider({ children }: { children: React.ReactNode }) {
   const { user, ready: authReady } = useAuth();
+  const offline = useOfflineOptional();
   const [posts, setPosts] = useState<Post[]>([]);
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
@@ -39,9 +44,21 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    const data = await api<{ posts: Post[]; savedIds: string[] }>("/api/posts");
-    setPosts(data.posts);
-    setSavedIds(data.savedIds ?? []);
+    try {
+      const data = await api<{ posts: Post[]; savedIds: string[] }>("/api/posts");
+      setPosts(data.posts);
+      setSavedIds(data.savedIds ?? []);
+      setError(null);
+    } catch (e) {
+      const cached = await kvGet<{ posts: Post[]; savedIds: string[] }>("feedCache");
+      if (cached?.posts) {
+        setPosts(cached.posts);
+        setSavedIds(cached.savedIds ?? []);
+        setError("Showing cached feed (offline)");
+      } else {
+        throw e;
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -62,13 +79,70 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
       error,
       reload,
       addPost: async (input) => {
+        const online = typeof navigator === "undefined" || navigator.onLine;
+        if (!online || offline?.online === false) {
+          const clientId = newClientId();
+          const pendingImageBlobs = [];
+          for (const file of input.pendingFiles ?? []) {
+            pendingImageBlobs.push({
+              name: file.name,
+              type: file.type,
+              dataUrl: await fileToDataUrl(file),
+            });
+          }
+          await enqueue({
+            id: clientId,
+            type: "createPost",
+            payload: {
+              text: input.text,
+              images: input.images ?? [],
+              privacy: input.privacy,
+              feeling: input.feeling,
+              location: input.location,
+              clientId,
+              pendingImageBlobs,
+            },
+          });
+          const optimistic: Post = {
+            id: clientId,
+            author: user!,
+            text: input.text,
+            images: (input.images ?? []).concat(
+              pendingImageBlobs.map((b) => b.dataUrl),
+            ),
+            privacy: input.privacy ?? "public",
+            feeling: input.feeling,
+            location: input.location,
+            createdAt: "Pending sync",
+            likes: 0,
+            comments: 0,
+            shares: 0,
+          };
+          setPosts((prev) => [optimistic, ...prev]);
+          toast.message("Saved offline — will sync when online");
+          await offline?.syncNow();
+          return;
+        }
+        let images = input.images ?? [];
+        if (input.pendingFiles?.length) {
+          const { uploadImage } = await import("@/lib/upload");
+          for (const f of input.pendingFiles) {
+            images = [...images, await uploadImage(f)];
+          }
+        }
         const data = await api<{ post: Post }>("/api/posts", {
           method: "POST",
-          body: JSON.stringify(input),
+          body: JSON.stringify({ ...input, images, pendingFiles: undefined }),
         });
         setPosts((prev) => [data.post, ...prev]);
       },
       updatePost: async (id, patch) => {
+        if (!navigator.onLine) {
+          await enqueue({ id: newClientId(), type: "updatePost", payload: { id, patch } });
+          setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+          toast.message("Edit queued offline");
+          return;
+        }
         const data = await api<{ post: Post }>(`/api/posts/${id}`, {
           method: "PATCH",
           body: JSON.stringify(patch),
@@ -76,6 +150,12 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
         replace(data.post);
       },
       deletePost: async (id) => {
+        if (!navigator.onLine) {
+          await enqueue({ id: newClientId(), type: "deletePost", payload: { id } });
+          setPosts((prev) => prev.filter((p) => p.id !== id));
+          toast.message("Delete queued offline");
+          return;
+        }
         await api(`/api/posts/${id}`, { method: "DELETE" });
         setPosts((prev) => prev.filter((p) => p.id !== id));
       },
@@ -98,7 +178,7 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
       },
       visiblePosts: posts.filter((p) => !hiddenIds.includes(p.id)),
     }),
-    [posts, hiddenIds, savedIds, ready, error, reload],
+    [posts, hiddenIds, savedIds, ready, error, reload, offline, user],
   );
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>;

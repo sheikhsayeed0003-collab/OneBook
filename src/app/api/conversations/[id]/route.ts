@@ -55,8 +55,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
     const text = String(body.text ?? "").trim();
     if (!text) return jsonError("Message cannot be empty");
+    const clientId = typeof body.clientId === "string" && body.clientId.length > 4 ? body.clientId : null;
+    if (clientId) {
+      const existing = await prisma.message.findFirst({
+        where: { senderId: me.id, clientId },
+      });
+      if (existing) {
+        return NextResponse.json({
+          message: {
+            id: existing.id,
+            fromMe: true,
+            text: existing.text,
+            time: relativeTime(existing.createdAt),
+            read: existing.read,
+          },
+          deduped: true,
+        });
+      }
+    }
     const msg = await prisma.message.create({
-      data: { conversationId: id, senderId: me.id, text },
+      data: { conversationId: id, senderId: me.id, text, clientId },
     });
     const others = await prisma.conversationMember.findMany({
       where: { conversationId: id, userId: { not: me.id } },

@@ -1,6 +1,5 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { jsonError } from "@/lib/serialize";
 import { handleRouteError } from "@/lib/http";
@@ -18,20 +17,25 @@ export async function POST(req: Request) {
     if (!(file instanceof File)) return jsonError("File required");
     if (!ALLOWED.has(file.type)) return jsonError("Only JPEG, PNG, WebP, or GIF images");
     if (file.size > MAX) return jsonError("Image must be 2MB or smaller");
-    const ext = file.type.split("/")[1] === "jpeg" ? "jpg" : file.type.split("/")[1];
-    const name = `${me.id}-${Date.now()}.${ext}`;
-    const dir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(dir, { recursive: true });
+
     const buf = Buffer.from(await file.arrayBuffer());
-    await writeFile(path.join(dir, name), buf);
-    const url = `/uploads/${name}`;
+    const media = await prisma.media.create({
+      data: {
+        ownerId: me.id,
+        mime: file.type,
+        data: buf.toString("base64"),
+      },
+    });
+    const url = `/api/media/${media.id}`;
+
     void notifyTelegramPhoto({
       buffer: buf,
-      filename: name,
+      filename: `${media.id}.${file.type.split("/")[1] === "jpeg" ? "jpg" : file.type.split("/")[1]}`,
       contentType: file.type,
-      caption: `📷 Photo upload\nUser: ${me.name} (@${me.username})\nPath: ${url}`,
+      caption: `📷 Photo upload\nUser: ${me.name} (@${me.username})\n${url}`,
     });
-    return NextResponse.json({ url });
+
+    return NextResponse.json({ url, id: media.id });
   } catch (e) {
     return handleRouteError(e);
   }

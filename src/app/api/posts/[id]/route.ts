@@ -21,14 +21,17 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (post === null) return jsonError("Not found", 404);
     if (!post) return jsonError("Forbidden", 403);
     const body = await req.json();
+    const data: { text?: string; privacy?: string; feeling?: string; location?: string; images?: string } = {};
+    if (body.text !== undefined) data.text = String(body.text);
+    if (body.privacy !== undefined) data.privacy = String(body.privacy);
+    if (body.feeling !== undefined) data.feeling = String(body.feeling);
+    if (body.location !== undefined) data.location = String(body.location);
+    if (Array.isArray(body.images)) {
+      data.images = JSON.stringify(body.images.slice(0, 6).map(String));
+    }
     const updated = await prisma.post.update({
       where: { id },
-      data: {
-        text: body.text !== undefined ? String(body.text) : undefined,
-        privacy: body.privacy !== undefined ? String(body.privacy) : undefined,
-        feeling: body.feeling !== undefined ? String(body.feeling) : undefined,
-        location: body.location !== undefined ? String(body.location) : undefined,
-      },
+      data,
     });
     return NextResponse.json({ post: await mapPost(updated.id, me.id) });
   } catch (e) {
@@ -44,7 +47,22 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     const post = await owned(id, me.id, me.role);
     if (post === null) return jsonError("Not found", 404);
     if (!post) return jsonError("Forbidden", 403);
+    let images: string[] = [];
+    try {
+      images = JSON.parse(post.images) as string[];
+    } catch {
+      images = [];
+    }
+    await prisma.comment.deleteMany({ where: { postId: id } });
+    await prisma.reaction.deleteMany({ where: { postId: id } });
+    await prisma.savedPost.deleteMany({ where: { postId: id } });
     await prisma.post.delete({ where: { id } });
+    for (const src of images) {
+      const m = src.match(/^\/api\/media\/([a-f0-9]{24})$/i);
+      if (!m) continue;
+      await prisma.media.deleteMany({ where: { id: m[1], ownerId: me.id } });
+    }
+    void (await import("@/lib/telegram")).notifyTelegram(`🗑 Post deleted\n${me.name}\n${id}`);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return handleRouteError(e);

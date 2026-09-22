@@ -325,9 +325,52 @@ export function PostCard({ post }: { post: Post }) {
             <option value="custom">Custom</option>
           </select>
           <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-28" />
+          <div className="flex flex-wrap gap-2">
+            {post.images.map((src) => (
+              <div key={src} className="relative">
+                <img src={src} alt="" className="h-16 w-16 rounded object-cover" />
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="absolute -top-1 -right-1 h-6 px-1 text-[10px]"
+                  onClick={async () => {
+                    const next = post.images.filter((x) => x !== src);
+                    const m = src.match(/^\/api\/media\/([a-f0-9]{24})$/i);
+                    if (m && navigator.onLine) {
+                      await api(`/api/media/${m[1]}`, { method: "DELETE" });
+                    }
+                    await updatePost(post.id, { images: next });
+                    toast.success("Photo removed");
+                  }}
+                >
+                  Del
+                </Button>
+              </div>
+            ))}
+          </div>
+          <label className="text-sm">
+            Add photos
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="mt-1 block w-full text-xs"
+              onChange={async (e) => {
+                const { uploadImage } = await import("@/lib/upload");
+                const added: string[] = [];
+                for (const f of [...(e.target.files ?? [])].slice(0, 4)) {
+                  added.push(await uploadImage(f));
+                }
+                if (added.length) {
+                  await updatePost(post.id, { images: [...post.images, ...added].slice(0, 6) });
+                  toast.success("Photos updated");
+                }
+              }}
+            />
+          </label>
           <Button
-            onClick={() => {
-              updatePost(post.id, { text: draft, privacy });
+            onClick={async () => {
+              await updatePost(post.id, { text: draft, privacy });
               setEditing(false);
               toast.success("Post updated");
             }}

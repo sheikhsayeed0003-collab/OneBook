@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Image as ImageIcon, MapPin, Smile, Video } from "lucide-react";
+import { Image as ImageIcon, MapPin, Smile, Video, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useSocial } from "@/components/social-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,16 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import type { Privacy } from "@/lib/types";
-import { uploadImage } from "@/lib/upload";
-
-async function filesToUrls(files: FileList | null) {
-  if (!files?.length) return [] as string[];
-  const urls: string[] = [];
-  for (const file of [...files].slice(0, 4)) {
-    urls.push(await uploadImage(file));
-  }
-  return urls;
-}
 
 export function CreatePost() {
   const { user } = useAuth();
@@ -35,26 +25,39 @@ export function CreatePost() {
   const [privacy, setPrivacy] = useState<Privacy>("public");
   const [feeling, setFeeling] = useState("");
   const [location, setLocation] = useState("");
-  const [images, setImages] = useState<string[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  function pickFiles(list: FileList | null) {
+    if (!list?.length) return;
+    const next = [...files, ...[...list].slice(0, 4 - files.length)].slice(0, 4);
+    setFiles(next);
+    setPreviews(next.map((f) => URL.createObjectURL(f)));
+  }
 
   async function publish() {
-    if (!text.trim() && images.length === 0) return;
+    if (!text.trim() && files.length === 0) return;
+    setBusy(true);
     try {
       await addPost({
         text: text.trim() || " ",
-        images,
         privacy,
         feeling: feeling || undefined,
         location: location || undefined,
+        pendingFiles: files,
       });
-      toast.success("Post published");
+      toast.success(navigator.onLine ? "Post published" : "Post saved offline");
       setText("");
       setFeeling("");
       setLocation("");
-      setImages([]);
+      setFiles([]);
+      setPreviews([]);
       setOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not post");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -118,49 +121,50 @@ export function CreatePost() {
               Add photos
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/gif"
                 multiple
                 className="hidden"
-                onChange={async (e) => setImages(await filesToUrls(e.target.files))}
+                onChange={(e) => pickFiles(e.target.files)}
               />
             </label>
-            {images.length ? (
+            {previews.length ? (
               <div className="grid grid-cols-2 gap-1">
-                {images.map((src) => (
-                  <img key={src.slice(0, 40)} src={src} alt="" className="h-24 w-full rounded object-cover" />
+                {previews.map((src, i) => (
+                  <div key={src} className="relative">
+                    <img src={src} alt="" className="h-24 w-full rounded object-cover" />
+                    <button
+                      type="button"
+                      className="absolute top-1 right-1 rounded-full bg-black/60 p-0.5 text-white"
+                      onClick={() => {
+                        setFiles((f) => f.filter((_, j) => j !== i));
+                        setPreviews((p) => p.filter((_, j) => j !== i));
+                      }}
+                      aria-label="Remove photo"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
                 ))}
               </div>
             ) : null}
             <Button
               className="w-full bg-[#0866FF] hover:bg-[#0759db]"
-              disabled={!text.trim() && images.length === 0}
+              disabled={busy || (!text.trim() && files.length === 0)}
               onClick={publish}
             >
-              Post
+              {busy ? "Posting…" : "Post"}
             </Button>
           </DialogContent>
         </Dialog>
       </div>
       <div className="mt-3 grid grid-cols-3 border-t pt-2">
-        <button
-          type="button"
-          className="flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
-          onClick={() => setOpen(true)}
-        >
+        <button type="button" className="flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold text-muted-foreground hover:bg-muted" onClick={() => setOpen(true)}>
           <Video className="size-5 text-red-500" /> Live
         </button>
-        <button
-          type="button"
-          className="flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
-          onClick={() => setOpen(true)}
-        >
+        <button type="button" className="flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold text-muted-foreground hover:bg-muted" onClick={() => setOpen(true)}>
           <ImageIcon className="size-5 text-green-500" /> Photo
         </button>
-        <button
-          type="button"
-          className="flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
-          onClick={() => setOpen(true)}
-        >
+        <button type="button" className="flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold text-muted-foreground hover:bg-muted" onClick={() => setOpen(true)}>
           <Smile className="size-5 text-amber-500" /> Feeling
         </button>
       </div>

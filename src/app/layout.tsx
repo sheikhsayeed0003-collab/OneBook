@@ -21,6 +21,15 @@ export const metadata: Metadata = {
   },
   description: appConfig.description,
   icons: { icon: "/favicon.svg" },
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: appConfig.name,
+    statusBarStyle: "default",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
