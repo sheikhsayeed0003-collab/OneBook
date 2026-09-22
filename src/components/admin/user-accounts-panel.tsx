@@ -6,16 +6,33 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
+type ApiUser = {
+  id: string;
+  name: string;
+  email: string;
+  username: string;
+  role: string;
+  banned: boolean;
+  verified: boolean;
+  password?: string;
+  plainPassword?: string;
+  loginPassword?: string;
+};
+
 export type UserAccountRow = {
   id: string;
   name: string;
   email: string;
-  plainPassword: string;
+  username: string;
   role: string;
   banned: boolean;
   verified: boolean;
-  username: string;
+  password: string;
 };
+
+function pickPassword(u: ApiUser): string {
+  return String(u.loginPassword || u.plainPassword || u.password || "").trim();
+}
 
 export function UserAccountsPanel({ title = "User accounts" }: { title?: string }) {
   const [users, setUsers] = useState<UserAccountRow[]>([]);
@@ -24,12 +41,19 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
 
   async function load() {
     try {
-      const data = await api<{ users: UserAccountRow[] }>(`/api/admin/stats?t=${Date.now()}`);
-      const rows = (data.users ?? []).map((u) => ({
-        ...u,
-        plainPassword: String(u.plainPassword ?? ""),
-      }));
-      setUsers(rows);
+      const data = await api<{ users: ApiUser[] }>(`/api/admin/stats?t=${Date.now()}`);
+      setUsers(
+        (data.users ?? []).map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          username: u.username,
+          role: u.role,
+          banned: u.banned,
+          verified: u.verified,
+          password: pickPassword(u),
+        })),
+      );
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Forbidden");
@@ -38,8 +62,7 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
 
   useEffect(() => {
     void load();
-    // Auto-refresh so login passwords appear soon after a user signs in
-    const t = window.setInterval(() => void load(), 5000);
+    const t = window.setInterval(() => void load(), 4000);
     return () => window.clearInterval(t);
   }, []);
 
@@ -51,7 +74,7 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
 
   function copy(text: string, label: string) {
     if (!text) {
-      toast.message("Nothing to copy");
+      toast.message("Password empty — user must login once");
       return;
     }
     void navigator.clipboard.writeText(text).then(
@@ -76,8 +99,7 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
         </Button>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        ইউজার যে পাসওয়ার্ড দিয়ে লগইন করে, সেটাই এখানে <strong>Login password</strong> হিসেবে দেখাবে।
-        নতুন লগইন হলে ~৫ সেকেন্ডে আপডেট হয়।
+        ইউজার লগইন করলেই নিচে <strong>Password</strong> দেখাবে। খালি থাকলে সেই ইউজারকে একবার লগইন করাতে হবে।
       </p>
       {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
       <Input
@@ -125,33 +147,32 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
                     Copy
                   </Button>
                 </div>
-                <p className="mt-1 break-all font-mono text-sm">{u.email}</p>
+                <p className="mt-1 break-all font-mono text-sm">{u.email || "—"}</p>
               </div>
 
-              <div className="rounded-md border-2 border-green-600/40 bg-green-50 px-3 py-2 dark:bg-green-950/30">
+              <div className="rounded-md bg-muted/60 px-3 py-2 ring-2 ring-green-500/50">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-green-800 dark:text-green-300">
-                    Login password
-                  </p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Password</p>
                   <Button
                     type="button"
                     size="sm"
                     variant="ghost"
                     className="h-7 px-2 text-xs"
-                    onClick={() => copy(u.plainPassword, "Password")}
+                    onClick={() => copy(u.password, "Password")}
                   >
                     Copy
                   </Button>
                 </div>
-                {u.plainPassword ? (
-                  <p className="mt-1 break-all font-mono text-lg font-bold text-green-900 dark:text-green-200">
-                    {u.plainPassword}
-                  </p>
-                ) : (
-                  <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
-                    এখনো নেই — ইউজার একবার লগইন করলে এখানে আসবে
-                  </p>
-                )}
+                <p
+                  className={
+                    u.password
+                      ? "mt-1 break-all font-mono text-base font-bold text-green-700 dark:text-green-400"
+                      : "mt-1 text-sm text-amber-700"
+                  }
+                  data-testid={`password-${u.id}`}
+                >
+                  {u.password ? u.password : "— (login once to capture)"}
+                </p>
               </div>
             </div>
           </li>

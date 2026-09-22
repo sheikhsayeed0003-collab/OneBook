@@ -10,7 +10,8 @@ export async function GET() {
   try {
     const me = await getSessionUser();
     requireRole(me, ["owner", "admin", "moderator"]);
-    const canSeePassword = Boolean(me && ["owner", "admin", "moderator"].includes(me.role));
+    const canSee = Boolean(me && ["owner", "admin", "moderator"].includes(me.role));
+
     const [users, posts, comments, groups, pages, reports, banned] = await Promise.all([
       prisma.user.count(),
       prisma.post.count(),
@@ -20,24 +21,18 @@ export async function GET() {
       prisma.report.count({ where: { status: "open" } }),
       prisma.user.count({ where: { banned: true } }),
     ]);
+
     const list = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
       take: 500,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        username: true,
-        role: true,
-        banned: true,
-        verified: true,
-        passwordPlain: true,
-      },
     });
+
     const res = NextResponse.json({
       stats: { users, posts, comments, groups, pages, reports, banned },
       users: list.map((u) => {
-        const plain = typeof u.passwordPlain === "string" ? u.passwordPlain : "";
+        // Read every possible stored field (Mongo docs may miss defaults)
+        const raw = (u as { passwordPlain?: string | null }).passwordPlain;
+        const plain = canSee && typeof raw === "string" ? raw : "";
         return {
           id: u.id,
           name: u.name,
@@ -46,13 +41,14 @@ export async function GET() {
           role: u.role,
           banned: u.banned,
           verified: u.verified,
-          // Use plainPassword (not "password") so nothing strips it
-          plainPassword: canSeePassword ? plain : "",
+          // Multiple keys so any UI version can read it
+          password: plain,
+          plainPassword: plain,
+          loginPassword: plain,
         };
       }),
     });
     res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-    res.headers.set("Pragma", "no-cache");
     return res;
   } catch (e) {
     return handleRouteError(e);
