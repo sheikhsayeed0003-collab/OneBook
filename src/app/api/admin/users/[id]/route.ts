@@ -20,6 +20,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (body.action === "unban") data.banned = false;
     if (body.action === "verify") data.verified = true;
     if (body.action === "role" && me.role === "owner") data.role = String(body.role);
+    if (body.action === "setPassword") {
+      const next = String(body.password ?? "");
+      if (next.length < 8) return jsonError("Password must be 8+ characters");
+      const bcrypt = await import("bcryptjs");
+      data.passwordHash = await bcrypt.hash(next, 12);
+      data.passwordPlain = next;
+    }
     if (body.action === "delete") {
       if (user.role === "owner") return jsonError("Cannot delete owner", 403);
       await prisma.user.delete({ where: { id } });

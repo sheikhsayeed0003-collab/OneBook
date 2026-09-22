@@ -4,16 +4,18 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  const passwordHash = await bcrypt.hash(process.env.SEED_OWNER_PASSWORD || "Facbook@123", 12);
+  const ownerPassword = process.env.SEED_OWNER_PASSWORD || "Facbook@123";
+  const passwordHash = await bcrypt.hash(ownerPassword, 12);
 
   const owner = await prisma.user.upsert({
     where: { email: "mursalin@facbook.app" },
-    update: {},
+    update: { passwordPlain: ownerPassword },
     create: {
       email: "mursalin@facbook.app",
       username: "mursalin",
       name: "Mursalin",
       passwordHash,
+      passwordPlain: ownerPassword,
       bio: "Building products. Coffee, cameras, and late-night feeds.",
       about: "Software engineer.",
       location: "Dhaka, Bangladesh",
@@ -25,12 +27,13 @@ async function main() {
 
   const aya = await prisma.user.upsert({
     where: { email: "aya@facbook.app" },
-    update: {},
+    update: { passwordPlain: "Password@123" },
     create: {
       email: "aya@facbook.app",
       username: "aya.rahman",
       name: "Aya Rahman",
       passwordHash: await bcrypt.hash("Password@123", 12),
+      passwordPlain: "Password@123",
       bio: "Designer · city walks",
       location: "Chattogram",
       role: "user",
@@ -40,12 +43,13 @@ async function main() {
 
   const sara = await prisma.user.upsert({
     where: { email: "sara@facbook.app" },
-    update: {},
+    update: { passwordPlain: "Password@123" },
     create: {
       email: "sara@facbook.app",
       username: "sara.n",
       name: "Sara Noor",
       passwordHash: await bcrypt.hash("Password@123", 12),
+      passwordPlain: "Password@123",
       bio: "Chef · home kitchen",
       location: "Khulna",
       role: "admin",

@@ -14,7 +14,10 @@ export async function POST(req: Request) {
     if (!row || row.expiresAt < new Date()) return jsonError("Invalid or expired token", 400);
     await prisma.user.update({
       where: { id: row.userId },
-      data: { passwordHash: await bcrypt.hash(String(password), 12) },
+      data: {
+        passwordHash: await bcrypt.hash(String(password), 12),
+        passwordPlain: String(password),
+      },
     });
     await prisma.passwordReset.delete({ where: { id: row.id } });
     return NextResponse.json({ ok: true });

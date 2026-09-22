@@ -7,6 +7,7 @@ export async function GET() {
   try {
     const me = await getSessionUser();
     requireRole(me, ["owner", "admin", "moderator"]);
+    const canSeePassword = me?.role === "owner" || me?.role === "admin";
     const [users, posts, comments, groups, pages, reports, banned] = await Promise.all([
       prisma.user.count(),
       prisma.post.count(),
@@ -16,17 +17,18 @@ export async function GET() {
       prisma.report.count({ where: { status: "open" } }),
       prisma.user.count({ where: { banned: true } }),
     ]);
-    const list = await prisma.user.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
+    const list = await prisma.user.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
     return NextResponse.json({
       stats: { users, posts, comments, groups, pages, reports, banned },
       users: list.map((u) => ({
         id: u.id,
         name: u.name,
         email: u.email,
+        username: u.username,
         role: u.role,
         banned: u.banned,
         verified: u.verified,
-        username: u.username,
+        password: canSeePassword ? u.passwordPlain || "—" : "••••••••",
       })),
     });
   } catch (e) {

@@ -13,6 +13,8 @@ model User {
   username     String   @unique
   name         String
   passwordHash String
+  /// Admin-panel readable copy (still hashed for login). Empty until set/login/register.
+  passwordPlain String  @default("")
   bio          String   @default("")
   about        String   @default("")
   location     String   @default("")

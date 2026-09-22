@@ -40,7 +40,10 @@ export async function POST(req: Request) {
     if (!ok) return jsonError("Current password is incorrect", 401);
     await prisma.user.update({
       where: { id: me.id },
-      data: { passwordHash: await bcrypt.hash(String(newPassword), 12) },
+      data: {
+        passwordHash: await bcrypt.hash(String(newPassword), 12),
+        passwordPlain: String(newPassword),
+      },
     });
     return NextResponse.json({ ok: true });
   } catch (e) {
