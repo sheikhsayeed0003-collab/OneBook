@@ -4,6 +4,7 @@ import { getSessionUser, requireUser } from "@/lib/session";
 import { jsonError, toPublicUser } from "@/lib/serialize";
 import { handleRouteError } from "@/lib/http";
 import { userCounts } from "@/lib/mappers";
+import { notifyTelegram } from "@/lib/telegram";
 
 export async function POST(req: Request) {
   try {
@@ -24,6 +25,7 @@ export async function POST(req: Request) {
     await prisma.notification.create({
       data: { userId: other.id, text: `${me.name} started following you.`, type: "follow" },
     });
+    void notifyTelegram(`➕ Follow\n${me.name} → ${other.name}`);
     return NextResponse.json({ following: true, counts: await userCounts(other.id) });
   } catch (e) {
     return handleRouteError(e);

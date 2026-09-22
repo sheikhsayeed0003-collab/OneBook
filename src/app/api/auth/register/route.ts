@@ -5,6 +5,7 @@ import { attachSession } from "@/lib/session";
 import { isEmail, jsonError, toPublicUser } from "@/lib/serialize";
 import { userCounts } from "@/lib/mappers";
 import { handleRouteError } from "@/lib/http";
+import { notifyTelegram } from "@/lib/telegram";
 
 export async function POST(req: Request) {
   try {
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
       },
     });
     const counts = await userCounts(user.id);
+    void notifyTelegram(`🆕 Register\n${user.name} (@${user.username})\n${user.email}`);
     const res = NextResponse.json({ user: toPublicUser(user, counts) });
     return attachSession(res, user.id);
   } catch (e) {

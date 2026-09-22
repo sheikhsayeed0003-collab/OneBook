@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { jsonError, relativeTime } from "@/lib/serialize";
 import { handleRouteError } from "@/lib/http";
+import { notifyTelegram } from "@/lib/telegram";
 
 async function member(conversationId: string, userId: string) {
   return prisma.conversationMember.findUnique({
@@ -67,6 +68,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         type: "message",
       })),
     });
+    void notifyTelegram(`✉️ Message\n${me.name}: ${text.slice(0, 400)}`);
     return NextResponse.json({
       message: { id: msg.id, fromMe: true, text: msg.text, time: relativeTime(msg.createdAt), read: false },
     });

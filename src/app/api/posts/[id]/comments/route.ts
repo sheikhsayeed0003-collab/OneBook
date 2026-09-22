@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { jsonError, relativeTime, toPublicUser } from "@/lib/serialize";
 import { handleRouteError } from "@/lib/http";
+import { notifyTelegram } from "@/lib/telegram";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -62,6 +63,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         },
       });
     }
+    void notifyTelegram(`💬 Comment\n${me.name}: ${text.slice(0, 400)}`);
     return NextResponse.json({
       comment: {
         id: comment.id,

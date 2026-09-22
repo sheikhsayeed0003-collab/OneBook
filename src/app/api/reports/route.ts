@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser, requireRole, requireUser } from "@/lib/session";
 import { jsonError } from "@/lib/serialize";
 import { handleRouteError } from "@/lib/http";
+import { notifyTelegram } from "@/lib/telegram";
 
 export async function GET() {
   try {
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
     const report = await prisma.report.create({
       data: { reporterId: me.id, target, reason, targetUserId: body.targetUserId || null },
     });
+    void notifyTelegram(`🚩 Report\n${me.name}\nTarget: ${target}\nReason: ${reason}`);
     return NextResponse.json({ report });
   } catch (e) {
     return handleRouteError(e);

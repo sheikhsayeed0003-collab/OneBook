@@ -4,6 +4,7 @@ import { getSessionUser, requireUser } from "@/lib/session";
 import { jsonError } from "@/lib/serialize";
 import { mapPost } from "@/lib/mappers";
 import { handleRouteError } from "@/lib/http";
+import { notifyTelegram } from "@/lib/telegram";
 
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -40,6 +41,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
         },
       });
     }
+    void notifyTelegram(`🔁 Share\n${me.name} shared post ${original.id}`);
     return NextResponse.json({ post: await mapPost(copy.id, me.id) });
   } catch (e) {
     return handleRouteError(e);

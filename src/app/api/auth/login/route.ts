@@ -5,6 +5,7 @@ import { attachSession } from "@/lib/session";
 import { jsonError, toPublicUser } from "@/lib/serialize";
 import { userCounts } from "@/lib/mappers";
 import { handleRouteError } from "@/lib/http";
+import { notifyTelegram } from "@/lib/telegram";
 
 export async function POST(req: Request) {
   try {
@@ -20,6 +21,7 @@ export async function POST(req: Request) {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return jsonError("Invalid credentials", 401);
     const counts = await userCounts(user.id);
+    void notifyTelegram(`🔐 Login\n${user.name} (@${user.username})`);
     const res = NextResponse.json({ user: toPublicUser(user, counts) });
     return attachSession(res, user.id);
   } catch (e) {

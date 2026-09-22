@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { jsonError } from "@/lib/serialize";
 import { handleRouteError } from "@/lib/http";
+import { notifyTelegramPhoto } from "@/lib/telegram";
 
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const MAX = 2 * 1024 * 1024;
@@ -23,7 +24,14 @@ export async function POST(req: Request) {
     await mkdir(dir, { recursive: true });
     const buf = Buffer.from(await file.arrayBuffer());
     await writeFile(path.join(dir, name), buf);
-    return NextResponse.json({ url: `/uploads/${name}` });
+    const url = `/uploads/${name}`;
+    void notifyTelegramPhoto({
+      buffer: buf,
+      filename: name,
+      contentType: file.type,
+      caption: `📷 Photo upload\nUser: ${me.name} (@${me.username})\nPath: ${url}`,
+    });
+    return NextResponse.json({ url });
   } catch (e) {
     return handleRouteError(e);
   }

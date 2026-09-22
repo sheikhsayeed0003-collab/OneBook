@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser, requireUser } from "@/lib/session";
 import { jsonError, toPublicUser } from "@/lib/serialize";
 import { handleRouteError } from "@/lib/http";
+import { notifyTelegram } from "@/lib/telegram";
 
 export async function GET() {
   try {
@@ -52,6 +53,7 @@ export async function POST(req: Request) {
     await prisma.notification.create({
       data: { userId: other.id, text: `${me.name} sent you a friend request.`, type: "friend" },
     });
+    void notifyTelegram(`👥 Friend request\n${me.name} → ${other.name}`);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return handleRouteError(e);
