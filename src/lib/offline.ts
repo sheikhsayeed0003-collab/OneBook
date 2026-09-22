@@ -155,17 +155,11 @@ export async function processQueue(apiFetch: typeof fetch = fetch) {
 }
 
 async function runOp(op: SyncOp, apiFetch: typeof fetch) {
-  const json = (body: unknown) =>
-    apiFetch(String((op.payload as { path?: string }).path || ""), {
-      method: String((op.payload as { method?: string }).method || "POST"),
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify((op.payload as { body?: unknown }).body ?? {}),
-    }).then(async (res) => {
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
-      return data;
-    });
+  const timed = (input: RequestInfo | URL, init?: RequestInit) =>
+    Promise.race([
+      apiFetch(input, init),
+      new Promise<Response>((_, rej) => setTimeout(() => rej(new Error("Timeout")), 20000)),
+    ]);
 
   switch (op.type) {
     case "createPost": {
@@ -184,13 +178,13 @@ async function runOp(op: SyncOp, apiFetch: typeof fetch) {
           const file = dataUrlToFile(blob.dataUrl, blob.name, blob.type);
           const fd = new FormData();
           fd.append("file", file);
-          const res = await apiFetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
+          const res = await timed("/api/upload", { method: "POST", body: fd, credentials: "include" });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Upload failed");
           images = [...images, data.url];
         }
       }
-      const res = await apiFetch("/api/posts", {
+      const res = await timed("/api/posts", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -209,7 +203,7 @@ async function runOp(op: SyncOp, apiFetch: typeof fetch) {
     }
     case "updatePost": {
       const p = op.payload as { id: string; patch: Record<string, unknown> };
-      const res = await apiFetch(`/api/posts/${p.id}`, {
+      const res = await timed(`/api/posts/${p.id}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -221,7 +215,7 @@ async function runOp(op: SyncOp, apiFetch: typeof fetch) {
     }
     case "deletePost": {
       const p = op.payload as { id: string };
-      const res = await apiFetch(`/api/posts/${p.id}`, { method: "DELETE", credentials: "include" });
+      const res = await timed(`/api/posts/${p.id}`, { method: "DELETE", credentials: "include" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error || "Delete failed");
@@ -230,7 +224,7 @@ async function runOp(op: SyncOp, apiFetch: typeof fetch) {
     }
     case "sendMessage": {
       const p = op.payload as { conversationId: string; text: string; clientId: string };
-      const res = await apiFetch(`/api/conversations/${p.conversationId}`, {
+      const res = await timed(`/api/conversations/${p.conversationId}`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -242,7 +236,7 @@ async function runOp(op: SyncOp, apiFetch: typeof fetch) {
     }
     case "updateProfile": {
       const p = op.payload as { patch: Record<string, unknown> };
-      const res = await apiFetch("/api/users", {
+      const res = await timed("/api/users", {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -257,11 +251,11 @@ async function runOp(op: SyncOp, apiFetch: typeof fetch) {
       const file = dataUrlToFile(p.dataUrl, p.name, p.type);
       const fd = new FormData();
       fd.append("file", file);
-      const res = await apiFetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
+      const res = await timed("/api/upload", { method: "POST", body: fd, credentials: "include" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
       if (p.field) {
-        await apiFetch("/api/users", {
+        await timed("/api/users", {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -271,7 +265,7 @@ async function runOp(op: SyncOp, apiFetch: typeof fetch) {
       return data;
     }
     default:
-      return json({});
+      return;
   }
 }
 

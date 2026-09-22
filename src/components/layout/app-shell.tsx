@@ -37,7 +37,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AppHeader />
       <div
         className={cn(
-          "mx-auto grid max-w-[1920px] gap-4 px-2 pt-4 md:px-4",
+          "mx-auto grid max-w-[1920px] gap-4 px-2 md:px-4",
+          pathname.startsWith("/messenger") ? "pt-0 md:pt-4" : "pt-4",
           isWide
             ? "grid-cols-1"
             : hideRight
@@ -50,14 +51,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <LeftSidebar className="sticky top-16 max-h-[calc(100vh-80px)] overflow-y-auto" />
           </div>
         ) : null}
-        <main className="min-w-0 pb-24 md:pb-8">{children}</main>
+        <main className={cn("min-w-0 md:pb-8", pathname.startsWith("/messenger") ? "pb-0" : "pb-24")}>{children}</main>
         {!isWide && !hideRight ? (
           <div className="hidden lg:block">
             <RightSidebar />
           </div>
         ) : null}
       </div>
-      <MobileNav />
+      {pathname.startsWith("/messenger") ? null : <MobileNav />}
     </div>
   );
 }

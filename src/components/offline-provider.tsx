@@ -111,6 +111,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     [status, pending, online, syncNow, refreshPending],
   );
 
+  // Cache feed/chats once when coming online (not on every sync status tick)
   useEffect(() => {
     if (!online) return;
     fetch("/api/posts", { credentials: "include" })
@@ -121,7 +122,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       .then((r) => r.json())
       .then((d) => kvSet("conversationsCache", d))
       .catch(() => {});
-  }, [online, status]);
+  }, [online]);
 
   return (
     <OfflineContext.Provider value={value}>

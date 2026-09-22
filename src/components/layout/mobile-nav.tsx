@@ -9,6 +9,10 @@ import { cn } from "@/lib/utils";
 export function MobileNav() {
   const pathname = usePathname();
   const { user } = useAuth();
+
+  // Messenger needs the full screen for the compose bar on phones
+  if (pathname.startsWith("/messenger")) return null;
+
   const items = [
     { href: "/", icon: Home, label: "Home" },
     { href: "/friends", icon: Users, label: "Friends" },
